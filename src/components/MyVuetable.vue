@@ -2,7 +2,7 @@
   <div class="ui container">
     <filter-bar></filter-bar>
     <vuetable ref="vuetable"
-      api-url="https://vuetable.ratiw.net/api/users"
+      api-url="http://localhost:8888/"
       :fields="fields"
       pagination-path=""
       @vuetable:pagination-data="onPaginationData"
@@ -52,18 +52,30 @@ export default {
   },
   data () {
     return {
-      fields: ['name', 'email', 'birthdate',
+      fields: [
         {
-          name: 'address.line1',
-          title: 'Address 1'
+          name: 'order_name',
+          title: 'Order Name'
         },
         {
-          name: 'address.line2',
-          title: 'Address 2'
+          name: 'customer_company',
+          title: 'Customer Company'
         },
         {
-          name: 'address.zipcode',
-          title: 'Zipcode'
+          name: 'customer_name',
+          title: 'Customer Name'
+        },
+        {
+          name: 'order_date',
+          title: 'Order date'
+        },
+        {
+          name: 'delivered_amount',
+          title: 'Delivered Amount'
+        },
+        {
+          name: 'total_amount',
+          title: 'Total Amount'
         }],
       moreParams: {}
     }

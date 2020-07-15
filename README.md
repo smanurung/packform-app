@@ -1,6 +1,6 @@
-# project
+# packform
 
-## Project setup
+## Packform setup
 ```
 yarn install
 ```
