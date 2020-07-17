@@ -1,7 +1,7 @@
 create user pack_admin;
 create database packform-db;
 grant all privileges on database packform-db to pack_admin;
-alter user pack_admin with encrypted password 'packpass';
+alter user pack_admin with encrypted password '<password>';
 
 create table delivery (
     id serial primary key,

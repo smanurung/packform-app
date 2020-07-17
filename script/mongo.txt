@@ -1,0 +1,11 @@
+use packform-db
+db.createCollection('customer_companies')
+db.createCollection('customers')
+db.createUser({
+    user: "pack_admin",
+    pwd: "<password>",
+    roles: [{
+        role: "dbOwner",
+        db: "packform-db"
+    }]
+})

@@ -3,7 +3,6 @@ import csv
 from datetime import datetime
 
 # This assumes database and tables are created.
-
 if __name__ == "__main__":
     try:
         conn = psycopg2.connect("dbname='packform-db' user='pack_admin' host='localhost' password='packpass'")
