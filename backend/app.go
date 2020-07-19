@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
@@ -27,14 +29,16 @@ type HTTPResponse struct {
 }
 
 type Order struct {
-	ID              string `db:"id"`
-	OrderName       string `json:"order_name,omitempty" db:"order_name"`
-	CustomerID      string `db:"customer_id"`
-	CustomerCompany string `json:"customer_company,omitempty"`
-	CustomerName    string `json:"customer_name,omitempty"`
-	OrderDate       string `json:"order_date,omitempty" db:"created_at"`
-	DeliveredAmount string `json:"delivered_amount,omitempty" db:"delivered_amount"`
-	TotalAmount     string `json:"total_amount,omitempty" db:"amount"`
+	ID                 string  `db:"id"`
+	OrderName          string  `json:"order_name,omitempty" db:"order_name"`
+	CustomerID         string  `db:"customer_id"`
+	CustomerCompany    string  `json:"customer_company,omitempty"`
+	CustomerName       string  `json:"customer_name,omitempty"`
+	OrderDate          string  `json:"order_date,omitempty" db:"created_at"`
+	DeliveredAmount    float64 `json:"delivered_amount_float,omitempty" db:"delivered_amount"`
+	DeliveredAmountStr string  `json:"delivered_amount,omitempty"`
+	TotalAmount        float64 `json:"total_amount_float,omitempty" db:"amount"`
+	TotalAmountStr     string  `json:"total_amount,omitempty"`
 }
 
 type Customer struct {
@@ -50,6 +54,11 @@ type Company struct {
 	CompanyID   int    `bson:"company_id"`
 	CompanyName string `bson:"company_name"`
 }
+
+const (
+	layoutFrom = "2006-01-02T15:04:05Z"
+	layoutTo   = "Jan 2, 3:04 PM"
+)
 
 func generateHandler(db *sqlx.DB, mongodb *mongo.Database) func(w http.ResponseWriter, r *http.Request) {
 	return (func(w http.ResponseWriter, r *http.Request) {
@@ -132,15 +141,22 @@ func generateHandler(db *sqlx.DB, mongodb *mongo.Database) func(w http.ResponseW
 				log.Errorln(err)
 			}
 
-			datum := Order{
-				OrderName:       o.OrderName,
-				CustomerCompany: company.CompanyName,
-				CustomerName:    customer.Name,
-				OrderDate:       o.OrderDate,
-				DeliveredAmount: o.DeliveredAmount,
-				TotalAmount:     o.TotalAmount,
+			parsedTime, err := time.Parse(layoutFrom, o.OrderDate)
+			if err != nil {
+				log.Errorln(err)
 			}
-			data = append(data, datum)
+
+			o.CustomerCompany = company.CompanyName
+			o.CustomerName = customer.Name
+			o.OrderDate = parsedTime.Format(layoutTo)
+			o.TotalAmountStr = fmt.Sprintf("$%.2f", o.TotalAmount)
+
+			o.DeliveredAmountStr = "-"
+			if o.DeliveredAmount > 0 {
+				o.DeliveredAmountStr = fmt.Sprintf("$%.2f", o.DeliveredAmount)
+			}
+
+			data = append(data, o)
 		}
 
 		// create dummy response
