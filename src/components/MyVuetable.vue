@@ -77,7 +77,9 @@ export default {
           name: 'total_amount',
           title: 'Total Amount'
         }],
-      moreParams: {}
+      moreParams: {
+        per_page: 5
+      }
     }
   }
 }

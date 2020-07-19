@@ -1,10 +1,13 @@
 package main
 
 import (
-	"log"
-	"net/http"
-
 	"encoding/json"
+	"net/http"
+	"strconv"
+
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
+	log "github.com/sirupsen/logrus"
 )
 
 type HTTPResponse struct {
@@ -20,55 +23,128 @@ type HTTPResponse struct {
 }
 
 type Order struct {
-	OrderName       string `json:"order_name,omitempty"`
+	ID              string `db:"id"`
+	OrderName       string `json:"order_name,omitempty" db:"order_name"`
+	CustomerID      string `db:"customer_id"`
 	CustomerCompany string `json:"customer_company,omitempty"`
 	CustomerName    string `json:"customer_name,omitempty"`
-	OrderDate       string `json:"order_date,omitempty"`
-	DeliveredAmount string `json:"delivered_amount,omitempty"`
-	TotalAmount     string `json:"total_amount,omitempty"`
+	OrderDate       string `json:"order_date,omitempty" db:"created_at"`
+	DeliveredAmount string `json:"delivered_amount,omitempty" db:"delivered_amount"`
+	TotalAmount     string `json:"total_amount,omitempty" db:"amount"`
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
+func generateHandler(db *sqlx.DB) func(w http.ResponseWriter, r *http.Request) {
+	return (func(w http.ResponseWriter, r *http.Request) {
 
-	// create dummy response
-	resp := HTTPResponse{
-		CurrentPage: 1,
-		Total:       1,
-		From:        1,
-		To:          1,
-		NextPageURL: "",
-		PrevPageURL: "",
-		PerPage:     1,
-		LastPage:    1,
-		Data: []Order{
-			{
-				OrderName:       "C19190 Christmas",
-				CustomerCompany: "Sony Ericsson",
-				CustomerName:    "Dr. Harold Senger",
-				OrderDate:       "2020-01-02T15:34:12Z",
-				DeliveredAmount: "$99.11",
-				TotalAmount:     "$99.11",
-			},
-		},
-	}
+		page := r.FormValue("page")
+		perPage := r.FormValue("per_page")
 
-	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8080")
-	encoded, err := json.Marshal(resp)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+		offset := 0
+		pageInt := 0
+		perPageInt := 10
+		var err error
+		if page != "" && perPage != "" {
+			pageInt, err = strconv.Atoi(page)
+			if err != nil {
+				log.Errorln(err)
+			}
+			perPageInt, err = strconv.Atoi(perPage)
+			if err != nil {
+				log.Errorln(err)
+			}
+			offset = (pageInt - 1) * perPageInt
+		}
+		log.Infoln(page, perPage, offset)
 
-	_, err = w.Write(encoded)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+		query := `
+			with some_orders as (
+				select id, order_name, created_at, customer_id
+				from orders
+				order by created_at desc
+				limit $1
+				offset $2
+			),
+			some_order_items as (
+				select A.id, order_name, created_at, customer_id, B.id as order_item_id, price_per_unit, quantity
+				from some_orders as A left join order_items as B
+				on A.id = B.order_id
+			)
+			select order_name, created_at, customer_id, sum(price_per_unit*quantity) as amount, sum(coalesce(price_per_unit*delivered_quantity,0)) as delivered_amount
+			from some_order_items as A left join delivery as B
+			on A.order_item_id = B.order_item_id
+			group by order_name, created_at, customer_id
+			order by created_at desc
+		`
+
+		var orders []Order
+		err = db.Select(&orders, query, perPage, offset)
+		if err != nil {
+			log.Errorln(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		// count query
+		query = "select count(1) from orders"
+		var total int
+		err = db.Get(&total, query)
+		if err != nil {
+			log.Errorln(err)
+		}
+		lastPage := total / perPageInt
+
+		var data []Order
+		for _, o := range orders {
+			log.Infoln(o)
+			datum := Order{
+				OrderName:       o.OrderName,
+				CustomerCompany: o.CustomerCompany,
+				CustomerName:    o.CustomerName,
+				OrderDate:       o.OrderDate,
+				DeliveredAmount: o.DeliveredAmount,
+				TotalAmount:     o.TotalAmount,
+			}
+			data = append(data, datum)
+		}
+
+		// create dummy response
+		resp := HTTPResponse{
+			CurrentPage: pageInt,
+			Total:       total,
+			From:        offset + 1,
+			To:          offset + perPageInt,
+			NextPageURL: "",
+			PrevPageURL: "",
+			PerPage:     perPageInt,
+			LastPage:    lastPage,
+			Data:        data,
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8080")
+		encoded, err := json.Marshal(resp)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		_, err = w.Write(encoded)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	})
 }
 
 func main() {
-	http.HandleFunc("/", handler)
 
-	log.Println("listening...")
-	log.Fatal(http.ListenAndServe(":8888", nil))
+	sqlxconn := "host=localhost port=5432 user=pack_admin password=packpass dbname=packform-db sslmode=disable"
+	db, err := sqlx.Connect("postgres", sqlxconn)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	http.HandleFunc("/", generateHandler(db))
+
+	log.Infoln("listening...")
+	log.Fatalln(http.ListenAndServe(":8888", nil))
 }
