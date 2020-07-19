@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -8,6 +9,9 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	log "github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type HTTPResponse struct {
@@ -33,7 +37,21 @@ type Order struct {
 	TotalAmount     string `json:"total_amount,omitempty" db:"amount"`
 }
 
-func generateHandler(db *sqlx.DB) func(w http.ResponseWriter, r *http.Request) {
+type Customer struct {
+	UserID      string `bson:"user_id"`
+	Login       string `bson:"login"`
+	Password    string `bson:"password"`
+	Name        string `bson:"name"`
+	CompanyID   int    `bson:"company_id"`
+	CreditCards string `bson:"credit_cards"`
+}
+
+type Company struct {
+	CompanyID   int    `bson:"company_id"`
+	CompanyName string `bson:"company_name"`
+}
+
+func generateHandler(db *sqlx.DB, mongodb *mongo.Database) func(w http.ResponseWriter, r *http.Request) {
 	return (func(w http.ResponseWriter, r *http.Request) {
 
 		page := r.FormValue("page")
@@ -93,13 +111,31 @@ func generateHandler(db *sqlx.DB) func(w http.ResponseWriter, r *http.Request) {
 		}
 		lastPage := total / perPageInt
 
+		customerColl := mongodb.Collection("customers")
+		companiesColl := mongodb.Collection("customer_companies")
+
 		var data []Order
 		for _, o := range orders {
 			log.Infoln(o)
+
+			var customer Customer
+			filterCustomer := bson.D{{"user_id", o.CustomerID}}
+			err = customerColl.FindOne(context.TODO(), filterCustomer).Decode(&customer)
+			if err != nil {
+				log.Errorln(err)
+			}
+
+			var company Company
+			filterCompany := bson.D{{"company_id", customer.CompanyID}}
+			err = companiesColl.FindOne(context.TODO(), filterCompany).Decode(&company)
+			if err != nil {
+				log.Errorln(err)
+			}
+
 			datum := Order{
 				OrderName:       o.OrderName,
-				CustomerCompany: o.CustomerCompany,
-				CustomerName:    o.CustomerName,
+				CustomerCompany: company.CompanyName,
+				CustomerName:    customer.Name,
 				OrderDate:       o.OrderDate,
 				DeliveredAmount: o.DeliveredAmount,
 				TotalAmount:     o.TotalAmount,
@@ -143,7 +179,20 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	http.HandleFunc("/", generateHandler(db))
+	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
+	client, err := mongo.Connect(context.TODO(), clientOptions)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	err = client.Ping(context.TODO(), nil)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	mongodb := client.Database("packform-db")
+
+	http.HandleFunc("/", generateHandler(db, mongodb))
 
 	log.Infoln("listening...")
 	log.Fatalln(http.ListenAndServe(":8888", nil))
