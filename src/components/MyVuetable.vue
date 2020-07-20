@@ -31,6 +31,8 @@ export default {
   mounted () {
     this.$events.$on('filter-set', eventData => this.onFilterSet(eventData))
     this.$events.$on('filter-reset', () => this.onFilterReset())
+    this.$events.$on('start-date-set', dt => this.onStartDateSet(dt));
+    this.$events.$on('end-date-set', dt => this.onEndDateSet(dt));
   },
   methods: {
     onPaginationData (paginationData) {
@@ -40,14 +42,20 @@ export default {
       this.$refs.vuetable.changePage(page)
     },
     onFilterSet (filterText) {
-      this.moreParams = {
-        'filter': filterText
-      }
-      Vue.nextTick( () => this.$refs.vuetable.refresh())
+      this.moreParams['filter'] = filterText;
+      Vue.nextTick( () => this.$refs.vuetable.refresh());
     },
     onFilterReset () {
-      this.moreParams = {}
-      Vue.nextTick( () => this.$refs.vuetable.refresh())
+      delete this.moreParams['filter'];
+      Vue.nextTick( () => this.$refs.vuetable.refresh());
+    },
+    onStartDateSet(dt) {
+      this.moreParams['start_date'] = dt;
+      Vue.nextTick(() => this.$refs.vuetable.refresh());
+    },
+    onEndDateSet(dt) {
+      this.moreParams['end_date'] = dt;
+      Vue.nextTick(() => this.$refs.vuetable.refresh());
     }
   },
   data () {

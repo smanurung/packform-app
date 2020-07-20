@@ -8,6 +8,14 @@
           <button class="ui button" @click="resetFilter">Reset</button>
         </div>
       </div>
+      <div class="ui form">
+        <div class="inline field">
+          <label>Created date:</label>
+          <input type="date" v-model="startDate" @change="doStartDate">
+          <label>-</label>
+          <input type="date" v-model="endDate" @change="doEndDate">
+        </div>
+      </div>
     </div>
 </template>
 
@@ -15,7 +23,9 @@
   export default {
     data () {
       return {
-        filterText: ''
+        filterText: '',
+        startDate: '',
+        endDate: ''
       }
     },
     methods: {
@@ -25,6 +35,12 @@
       resetFilter () {
         this.filterText = ''
         this.$events.fire('filter-reset')
+      },
+      doStartDate () {
+        this.$events.fire('start-date-set', this.startDate);
+      },
+      doEndDate() {
+        this.$events.fire('end-date-set', this.endDate);
       }
     }
   }
