@@ -20,13 +20,13 @@ import VuetablePagination from 'vuetable-2/src/components/VuetablePagination'
 import FilterBar from './FilterBar'
 import VueEvents from 'vue-events'
 
-Vue.component('filter-bar', FilterBar)
 Vue.use(VueEvents)
 
 export default {
   components: {
     Vuetable,
-    VuetablePagination
+    VuetablePagination,
+    FilterBar
   },
   mounted () {
     this.$events.$on('filter-set', eventData => this.onFilterSet(eventData));

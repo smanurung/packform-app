@@ -15,7 +15,7 @@ npm run serve
 
 To start the server app, use the command below.
 ```shell
-go run backend/app.go
+go build backend/* && ./app
 ```
 
 After executing both commands, client app will start on port 8080 and server app on port 8888.

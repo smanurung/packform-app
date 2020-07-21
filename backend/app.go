@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -18,15 +17,13 @@ import (
 )
 
 type HTTPResponse struct {
-	CurrentPage int `json:"current_page,omitempty"`
-	Total       int `json:"total,omitempty"`
-	From        int `json:"from,omitempty"`
-	To          int `json:"to,omitempty"`
-	// NextPageURL string  `json:"next_page_url,omitempty"`
-	// PrevPageURL string  `json:"prev_page_url,omitempty"`
-	PerPage  int     `json:"per_page,omitempty"`
-	LastPage int     `json:"last_page,omitempty"`
-	Data     []Order `json:"data,omitempty"`
+	CurrentPage int     `json:"current_page,omitempty"`
+	Total       int     `json:"total,omitempty"`
+	From        int     `json:"from,omitempty"`
+	To          int     `json:"to,omitempty"`
+	PerPage     int     `json:"per_page,omitempty"`
+	LastPage    int     `json:"last_page,omitempty"`
+	Data        []Order `json:"data,omitempty"`
 }
 
 type Order struct {
@@ -61,7 +58,11 @@ const (
 	layoutTo   = "Jan 2, 3:04 PM"
 )
 
+// generateHandler returns function to handle request.
+// currently most processes are built into this function for simplicity purpose.
+// as the functionality of the app increases, process must be broken down into different modules.
 func generateHandler(db *sqlx.DB, mongodb *mongo.Database) func(w http.ResponseWriter, r *http.Request) {
+	// prepare once in the beginning.
 	loc, err := time.LoadLocation("Australia/Brisbane")
 	if err != nil {
 		log.Errorln(err)
@@ -69,12 +70,14 @@ func generateHandler(db *sqlx.DB, mongodb *mongo.Database) func(w http.ResponseW
 
 	return (func(w http.ResponseWriter, r *http.Request) {
 
+		// req params
 		page := r.FormValue("page")
 		perPage := r.FormValue("per_page")
+		filter := r.FormValue("filter")
+		startDate := r.FormValue("start_date")
+		endDate := r.FormValue("end_date")
 
-		offset := 0
-		pageInt := 0
-		perPageInt := 10
+		offset, pageInt, perPageInt := 0, 0, 10
 		var err error
 		if page != "" && perPage != "" {
 			pageInt, err = strconv.Atoi(page)
@@ -89,18 +92,9 @@ func generateHandler(db *sqlx.DB, mongodb *mongo.Database) func(w http.ResponseW
 		}
 		log.Infoln(page, perPage, offset)
 
-		filter := r.FormValue("filter")
-		startDate := r.FormValue("start_date")
-		endDate := r.FormValue("end_date")
-
-		// where := ""
-		// if filter := r.FormValue("filter"); filter != "" {
-		// 	where = "where order_name ilike '%" + filter + "%'"
-		// }
-
 		var filters []string
 		var args []interface{}
-		idx := 1 // since $1 and $2 are for paging (limit & offset).
+		idx := 1 // query placeholder for $n; to prevent sql injection.
 		if filter != "" {
 			filters = append(filters, fmt.Sprintf("order_name ilike $%d", idx))
 			args = append(args, "%"+filter+"%")
@@ -117,32 +111,9 @@ func generateHandler(db *sqlx.DB, mongodb *mongo.Database) func(w http.ResponseW
 			idx++
 		}
 
-		where := ""
-		if len(filters) > 0 {
-			where = "where " + strings.Join(filters, " and ")
-		}
-
-		query := `
-			with some_orders as (
-				select id, order_name, created_at, customer_id
-				from orders
-				` + where + `	order by created_at desc
-				` + fmt.Sprintf("limit $%d offset $%d", idx, idx+1) +
-			`),
-			some_order_items as (
-				select A.id, order_name, created_at, customer_id, B.id as order_item_id, price_per_unit, quantity
-				from some_orders as A left join order_items as B
-				on A.id = B.order_id
-			)
-			select order_name, created_at, customer_id, sum(price_per_unit*quantity) as amount, sum(coalesce(price_per_unit*delivered_quantity,0)) as delivered_amount
-			from some_order_items as A left join delivery as B
-			on A.order_item_id = B.order_item_id
-			group by order_name, created_at, customer_id
-			order by created_at desc
-		`
-
+		// TODO: use prepared statement.
+		query, where := buildQuery(filters, idx)
 		log.Infoln(query)
-		log.Infoln(append(args, perPage, offset))
 
 		var orders []Order
 		err = db.Select(&orders, query, append(args, perPage, offset)...)
@@ -152,7 +123,7 @@ func generateHandler(db *sqlx.DB, mongodb *mongo.Database) func(w http.ResponseW
 			return
 		}
 
-		// count query
+		// count query; use count(1) for efficiency.
 		query = "select count(1) from orders " + where
 		log.Infoln(query)
 
@@ -207,13 +178,12 @@ func generateHandler(db *sqlx.DB, mongodb *mongo.Database) func(w http.ResponseW
 			Total:       total,
 			From:        offset + 1,
 			To:          offset + perPageInt,
-			// NextPageURL: "",
-			// PrevPageURL: "",
-			PerPage:  perPageInt,
-			LastPage: lastPage,
-			Data:     data,
+			PerPage:     perPageInt,
+			LastPage:    lastPage,
+			Data:        data,
 		}
 
+		// TODO: move to separate config file.
 		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8080")
 		encoded, err := json.Marshal(resp)
 		if err != nil {
@@ -231,6 +201,7 @@ func generateHandler(db *sqlx.DB, mongodb *mongo.Database) func(w http.ResponseW
 
 func main() {
 
+	// TODO: move into separate config file.
 	sqlxconn := "host=localhost port=5432 user=pack_admin password=packpass dbname=packform-db sslmode=disable"
 	db, err := sqlx.Connect("postgres", sqlxconn)
 	if err != nil {
