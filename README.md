@@ -1,6 +1,8 @@
 # Packform App
 > Dashboard for packform-app
 
+![packform-gif](./packform.gif)
+
 Dashboard is for monitoring orders on packform.
 
 ## Installing / Getting started
