@@ -5,7 +5,6 @@
           <label>Search for:</label>
           <input type="text" v-model="filterText" class="three wide column" @keyup.enter="doFilter" placeholder="name, nickname, or email">
           <button class="ui primary button" @click="doFilter">Go</button>
-          <button class="ui button" @click="resetFilter">Reset</button>
         </div>
       </div>
       <div class="ui form">
@@ -31,10 +30,6 @@
     methods: {
       doFilter () {
         this.$events.fire('filter-set', this.filterText)
-      },
-      resetFilter () {
-        this.filterText = ''
-        this.$events.fire('filter-reset')
       },
       doStartDate () {
         this.$events.fire('start-date-set', this.startDate);

@@ -252,6 +252,8 @@ func main() {
 
 	http.HandleFunc("/", generateHandler(db, mongodb))
 
-	log.Infoln("listening...")
-	log.Fatalln(http.ListenAndServe(":8888", nil))
+	port := "8888"
+
+	log.Infof("listening on :%s...", port)
+	log.Fatalln(http.ListenAndServe(":"+port, nil))
 }

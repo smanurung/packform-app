@@ -29,8 +29,7 @@ export default {
     VuetablePagination
   },
   mounted () {
-    this.$events.$on('filter-set', eventData => this.onFilterSet(eventData))
-    this.$events.$on('filter-reset', () => this.onFilterReset())
+    this.$events.$on('filter-set', eventData => this.onFilterSet(eventData));
     this.$events.$on('start-date-set', dt => this.onStartDateSet(dt));
     this.$events.$on('end-date-set', dt => this.onEndDateSet(dt));
   },
@@ -43,10 +42,6 @@ export default {
     },
     onFilterSet (filterText) {
       this.moreParams['filter'] = filterText;
-      Vue.nextTick( () => this.$refs.vuetable.refresh());
-    },
-    onFilterReset () {
-      delete this.moreParams['filter'];
       Vue.nextTick( () => this.$refs.vuetable.refresh());
     },
     onStartDateSet(dt) {
